@@ -43,7 +43,9 @@ from bs4 import BeautifulSoup
 import pandas as pd
 import plotly.express as px
 
-from groq import Groq
+from langchain_groq import ChatGroq
+from langchain.prompts import PromptTemplate
+from langchain.schema import HumanMessage
 import time
 import random
 from urllib.parse import urlencode
@@ -489,39 +491,74 @@ def select_representative_reviews(reviews, sentiments, num_reviews=20):
     return selected_reviews[:num_reviews]
 
 def summarize_reviews_with_groq(selected_reviews, movie_title, api_key, total_reviews_count, sentiment_summary):
+    """
+    Summarize reviews using LangChain with Groq LLM
+    """
     try:
-        client = Groq(api_key=api_key)
+        # Initialize LangChain ChatGroq
+        llm = ChatGroq(
+            model="llama-3.3-70b-versatile",
+            groq_api_key=api_key,
+            temperature=0.3,
+            max_tokens=1000
+        )
         
+        # Prepare reviews text
         reviews_text = ""
         for i, review in enumerate(selected_reviews, 1):
             truncated_review = review[:600] + "..." if len(review) > 600 else review
             reviews_text += f"Review {i}: {truncated_review}\n\n"
         
-        prompt = f"""Analyze these {len(selected_reviews)} representative reviews for "{movie_title}" (from {total_reviews_count} total reviews).
+        # Create LangChain PromptTemplate for better prompt engineering
+        prompt_template = PromptTemplate(
+            input_variables=["num_reviews", "movie_title", "total_reviews", "sentiment_summary", "reviews"],
+            template="""You are an expert movie critic and data analyst. Analyze the following representative reviews for "{movie_title}".
 
-SENTIMENT BREAKDOWN: {sentiment_summary}
+📊 ANALYSIS CONTEXT:
+- Sample Size: {num_reviews} carefully selected reviews (from {total_reviews} total reviews)
+- Sentiment Distribution: {sentiment_summary}
 
-REVIEWS:
-{reviews_text}
+📝 REVIEWS TO ANALYZE:
+{reviews}
 
-Provide analysis with:
-1. **Overall Rating** (1-10) and reception summary
-2. **Key Themes** mentioned by viewers  
-3. **Strengths & Weaknesses** highlighted
-4. **Target Audience** who would enjoy this
-5. **Recommendation** (Yes/No with reasoning)
+🎯 PROVIDE COMPREHENSIVE ANALYSIS:
 
-Keep it concise but insightful."""
+1. **Overall Rating & Reception** 
+   - Give a rating out of 10
+   - Summarize the general critical reception
 
-        completion = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.3,
-            max_tokens=1000,
-            top_p=0.9
+2. **Key Themes & Topics**
+   - What aspects do viewers talk about most?
+   - Common praise or criticism patterns
+
+3. **Strengths & Weaknesses**
+   - Main positive highlights
+   - Primary concerns or criticisms
+
+4. **Target Audience**
+   - Who would most enjoy this?
+   - Who might not enjoy it?
+
+5. **Final Recommendation**
+   - Clear Yes/No recommendation
+   - Reasoning based on the review analysis
+
+Keep the analysis insightful, data-driven, and concise. Use bullet points where appropriate."""
         )
         
-        return completion.choices[0].message.content
+        # Format the prompt with actual values
+        formatted_prompt = prompt_template.format(
+            num_reviews=len(selected_reviews),
+            movie_title=movie_title,
+            total_reviews=total_reviews_count,
+            sentiment_summary=sentiment_summary,
+            reviews=reviews_text
+        )
+        
+        # Invoke LangChain LLM
+        response = llm.invoke([HumanMessage(content=formatted_prompt)])
+        
+        return response.content
         
     except Exception as e:
         return f"Error generating AI summary: {str(e)}"

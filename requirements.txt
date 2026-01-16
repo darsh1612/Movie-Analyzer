@@ -10,3 +10,6 @@ selenium
 scikit-learn
 python-dotenv
 gensim
+langchain
+langchain-groq
+langchain-core
