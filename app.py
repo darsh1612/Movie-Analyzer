@@ -514,7 +514,7 @@ Provide analysis with:
 Keep it concise but insightful."""
 
         completion = client.chat.completions.create(
-            model="gemma2-9b-it",
+            model="llama-3.3-70b-versatile",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3,
             max_tokens=1000,
