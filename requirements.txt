@@ -1,0 +1,12 @@
+streamlit
+numpy
+pandas
+nltk
+beautifulsoup4
+requests
+plotly
+groq
+selenium
+scikit-learn
+python-dotenv
+gensim
