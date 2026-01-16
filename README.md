@@ -67,10 +67,3 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed deployment instructions.
     └── secrets.toml.example # API key template
 ```
 
-## License
-
-MIT License
-
-## Author
-
-Built with ❤️ for NLP learning and portfolio demonstration
