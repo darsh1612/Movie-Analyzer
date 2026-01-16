@@ -14,6 +14,27 @@ import streamlit as st
 import pickle
 import numpy as np
 import nltk
+
+# Download NLTK data (required for Streamlit Cloud)
+try:
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    nltk.download('punkt', quiet=True)
+    
+try:
+    nltk.data.find('tokenizers/punkt_tab')
+except LookupError:
+    nltk.download('punkt_tab', quiet=True)
+    
+try:
+    nltk.data.find('corpora/stopwords')
+except LookupError:
+    nltk.download('stopwords', quiet=True)
+    
+try:
+    nltk.data.find('corpora/wordnet')
+except LookupError:
+    nltk.download('wordnet', quiet=True)
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 import string
