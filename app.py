@@ -44,8 +44,8 @@ import pandas as pd
 import plotly.express as px
 
 from langchain_groq import ChatGroq
-from langchain.prompts import PromptTemplate
-from langchain.schema import HumanMessage
+from langchain_core.prompts import PromptTemplate
+from langchain_core.messages import HumanMessage
 import time
 import random
 from urllib.parse import urlencode
