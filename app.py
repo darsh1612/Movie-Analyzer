@@ -251,7 +251,10 @@ def get_movie_reviews_fast(movie_name, max_reviews=100):
         # Method 1: Try IMDb's suggestion API (most reliable)
         try:
             # IMDb suggestion API - returns JSON with movie suggestions
-            suggestion_url = f"https://v2.sg.media-imdb.com/suggestion/h/{movie_name.replace(' ', '_').lower()}.json"
+            # URL format: /suggestion/{first_letter}/{search_term}.json
+            first_letter = movie_name.strip()[0].lower() if movie_name.strip() else 'a'
+            search_term = movie_name.replace(' ', '_').lower()
+            suggestion_url = f"https://v2.sg.media-imdb.com/suggestion/{first_letter}/{search_term}.json"
             suggestion_response = session.get(suggestion_url, timeout=10)
             
             if suggestion_response.status_code == 200:
@@ -275,7 +278,8 @@ def get_movie_reviews_fast(movie_name, max_reviews=100):
         # Method 2: Try alternative suggestion endpoint
         if not movie_id:
             try:
-                alt_suggestion_url = f"https://v3.sg.media-imdb.com/suggestion/x/{movie_name.replace(' ', '%20')}.json"
+                first_letter = movie_name.strip()[0].lower() if movie_name.strip() else 'a'
+                alt_suggestion_url = f"https://v3.sg.media-imdb.com/suggestion/{first_letter}/{movie_name.replace(' ', '%20')}.json"
                 alt_response = session.get(alt_suggestion_url, timeout=10)
                 
                 if alt_response.status_code == 200:
