@@ -233,61 +233,110 @@ def create_title_section():
 def get_movie_reviews_fast(movie_name, max_reviews=100):
     """
     FAST and RELIABLE scraper using only requests - no Selenium issues
+    Uses IMDb's suggestion API for reliable movie search
     """
     try:
-        # Step 1: Get movie ID using direct IMDb search (fixing Cinemagoer compatibility)
-        search_url = "https://www.imdb.com/find/"
-        params = {'q': movie_name, 's': 'tt', 'ttype': 'tv,ft'}
-        
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept': 'application/json, text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.5',
         }
         
         session = requests.Session()
         session.headers.update(headers)
         
-        # Search for the movie/series
-        search_response = session.get(search_url, params=params, timeout=10)
-        search_response.raise_for_status()
-        search_soup = BeautifulSoup(search_response.content, 'html.parser')
-        
-        # Try to find the first result
         movie_id = None
         movie_title = None
         
-        # New IMDb search result selectors (2025)
-        result_selectors = [
-            'li.find-title-result a',
-            'li.ipc-metadata-list-summary-item a.ipc-metadata-list-summary-item__t',
-            'section[data-testid="find-results-section-title"] ul li a',
-            'ul.ipc-metadata-list li a'
-        ]
+        # Method 1: Try IMDb's suggestion API (most reliable)
+        try:
+            # IMDb suggestion API - returns JSON with movie suggestions
+            suggestion_url = f"https://v2.sg.media-imdb.com/suggestion/h/{movie_name.replace(' ', '_').lower()}.json"
+            suggestion_response = session.get(suggestion_url, timeout=10)
+            
+            if suggestion_response.status_code == 200:
+                suggestion_data = suggestion_response.json()
+                if 'd' in suggestion_data and len(suggestion_data['d']) > 0:
+                    for item in suggestion_data['d']:
+                        # Look for movies (feature) or TV series
+                        if item.get('qid') in ['movie', 'tvSeries', 'tvMovie', 'video']:
+                            movie_id = item.get('id', '').replace('tt', '')
+                            movie_title = item.get('l', movie_name)
+                            break
+                    # If no movie/TV found, take first result anyway
+                    if not movie_id and suggestion_data['d']:
+                        first_item = suggestion_data['d'][0]
+                        if first_item.get('id', '').startswith('tt'):
+                            movie_id = first_item['id'].replace('tt', '')
+                            movie_title = first_item.get('l', movie_name)
+        except Exception:
+            pass  # Will try fallback methods
         
-        for selector in result_selectors:
-            results = search_soup.select(selector)
-            if results:
-                first_result = results[0]
-                href = first_result.get('href', '')
-                if '/title/tt' in href:
-                    # Extract movie ID from URL like /title/tt0903747/
-                    movie_id = href.split('/title/tt')[1].split('/')[0]
-                    movie_title = first_result.get_text(strip=True)
-                    break
-        
+        # Method 2: Try alternative suggestion endpoint
         if not movie_id:
-            # Fallback: try to find any link with /title/tt pattern
-            all_links = search_soup.find_all('a', href=True)
-            for link in all_links:
-                href = link['href']
-                if '/title/tt' in href and len(link.get_text(strip=True)) > 0:
-                    movie_id = href.split('/title/tt')[1].split('/')[0]
-                    movie_title = link.get_text(strip=True)
-                    # Clean up title
-                    if len(movie_title) > 100:  # Skip if too long (likely not the title)
-                        continue
-                    break
+            try:
+                alt_suggestion_url = f"https://v3.sg.media-imdb.com/suggestion/x/{movie_name.replace(' ', '%20')}.json"
+                alt_response = session.get(alt_suggestion_url, timeout=10)
+                
+                if alt_response.status_code == 200:
+                    alt_data = alt_response.json()
+                    if 'd' in alt_data and len(alt_data['d']) > 0:
+                        for item in alt_data['d']:
+                            if item.get('id', '').startswith('tt'):
+                                movie_id = item['id'].replace('tt', '')
+                                movie_title = item.get('l', movie_name)
+                                break
+            except Exception:
+                pass
+        
+        # Method 3: Fallback to HTML search page
+        if not movie_id:
+            try:
+                search_url = "https://www.imdb.com/find/"
+                params = {'q': movie_name, 's': 'tt', 'ttype': 'ft,tv'}
+                
+                search_response = session.get(search_url, params=params, timeout=15)
+                search_response.raise_for_status()
+                search_soup = BeautifulSoup(search_response.content, 'html.parser')
+                
+                # Updated selectors for 2026 IMDb
+                result_selectors = [
+                    'a[href*="/title/tt"]',
+                    'li.ipc-metadata-list-summary-item a',
+                    'section[data-testid="find-results-section-title"] a',
+                    '.ipc-metadata-list a',
+                    'li.find-title-result a',
+                ]
+                
+                for selector in result_selectors:
+                    results = search_soup.select(selector)
+                    for result in results:
+                        href = result.get('href', '')
+                        if '/title/tt' in href:
+                            # Extract movie ID from URL
+                            match = href.split('/title/tt')[1].split('/')[0].split('?')[0]
+                            if match and match.isdigit():
+                                movie_id = match
+                                movie_title = result.get_text(strip=True) or movie_name
+                                if movie_title and len(movie_title) < 100:
+                                    break
+                    if movie_id:
+                        break
+                
+                # Last resort: find any tt link
+                if not movie_id:
+                    import re
+                    tt_pattern = re.compile(r'/title/tt(\d+)')
+                    all_links = search_soup.find_all('a', href=True)
+                    for link in all_links:
+                        match = tt_pattern.search(link['href'])
+                        if match:
+                            movie_id = match.group(1)
+                            movie_title = link.get_text(strip=True) or movie_name
+                            if movie_title and 0 < len(movie_title) < 100:
+                                break
+            except Exception:
+                pass
         
         if not movie_id:
             return None, f"Movie/Series '{movie_name}' not found. Please check the name and try again."
@@ -603,7 +652,7 @@ def main():
     # Main input
     st.markdown("### 🎬 Enter Movie or Series Name")
     movie_name_input = st.text_input(
-        "",
+        "Movie or Series Name",
         placeholder="e.g., Inception, Breaking Bad, Avengers Endgame",
         label_visibility="collapsed"
     )
